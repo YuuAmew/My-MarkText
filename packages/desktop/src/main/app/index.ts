@@ -1,4 +1,5 @@
 import path from 'path'
+import fs from 'fs'
 import fsPromises from 'fs/promises'
 import { exec } from 'child_process'
 import dayjs from 'dayjs'
@@ -381,21 +382,32 @@ class App {
 
     const createWindow = (): void => {
       if (isRestorePathway) {
-        // We will restore based off the previous buffer, one window per buffer store file
+        // A buffer represents all tabs of a window. Older recovery buffers are
+        // stale records, not separate windows to reopen.
         const bufferStores = editorBufferStore.getAll()
         const bufferStoreList = Object.values(bufferStores) as Array<{
           id: string
           filePath: string | null
         }>
-        if (bufferStoreList.length === 0) {
+        const restorableBuffers = bufferStoreList
+          .filter((bufferStoreInfo) => {
+            if (!bufferStoreInfo.filePath) return false
+            try {
+              editorBufferStore.readBufferStoreFile(bufferStoreInfo.filePath)
+              return true
+            } catch (error) {
+              log.warn('Skipping unreadable editor recovery buffer:', error)
+              return false
+            }
+          })
+          .sort((a, b) => fs.statSync(b.filePath!).mtimeMs - fs.statSync(a.filePath!).mtimeMs)
+        const latestBuffer = restorableBuffers[0]
+        if (!latestBuffer) {
           this._createEditorWindow()
           return
         }
 
-        bufferStoreList.forEach((bufferStoreInfo) => {
-          // Read the buffer store file and pass the content
-          this._createEditorWindow(null, [], [], {}, bufferStoreInfo)
-        })
+        this._createEditorWindow(null, [], [], {}, latestBuffer)
       } else if (_openFilesCache.length) {
         // We should wipe the buffer store if not it will keep creating new windows whenever we open files via double click in the file manager
         editorBufferStore.clearBufferStoresWithAllSaved()

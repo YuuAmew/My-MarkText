@@ -163,7 +163,7 @@ export const usePreferencesStore = defineStore('preferences', {
     codeBlockLineNumbers: true,
     trimUnnecessaryCodeBlockEmptyLines: true,
     wrapCodeBlocks: true,
-    editorLineWidth: '',
+    editorLineWidth: '850px',
 
     autoPairBracket: true,
     autoPairMarkdownSyntax: true,
@@ -196,9 +196,9 @@ export const usePreferencesStore = defineStore('preferences', {
     isGitlabCompatibilityEnabled: false,
     sequenceTheme: 'hand',
 
-    theme: 'light',
-    followSystemTheme: true,
-    lightModeTheme: 'light',
+    theme: 'tokyo-night-light',
+    followSystemTheme: false,
+    lightModeTheme: 'tokyo-night-light',
     darkModeTheme: 'dark',
     customCss: '',
 

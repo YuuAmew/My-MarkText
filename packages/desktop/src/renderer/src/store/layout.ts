@@ -46,8 +46,8 @@ const initialWidth = localStorage.getItem('side-bar-width')
 const initialSideBarWidth = normalizeSideBarWidth(initialWidth)
 
 export const useLayoutStore = defineStore('layout', () => {
-  const rightColumn = ref<string>('files')
-  const showSideBar = ref(false)
+  const rightColumn = ref<string>('toc')
+  const showSideBar = ref(true)
   const showTabBar = ref(false)
   const sideBarWidth = ref<number>(initialSideBarWidth)
 
@@ -106,8 +106,8 @@ export const useLayoutStore = defineStore('layout', () => {
     SET_SIDE_BAR_WIDTH(layout.sideBarWidth, { scheduleBufferUpdate: false })
     SET_LAYOUT(
       {
-        rightColumn: layout.rightColumn,
-        showSideBar: layout.showSideBar,
+        rightColumn: 'toc',
+        showSideBar: true,
         showTabBar: layout.showTabBar
       },
       { scheduleBufferUpdate: false }

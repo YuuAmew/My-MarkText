@@ -8,14 +8,21 @@
     </div>
     <el-tree
       v-if="toc.length"
+      ref="tree"
       :data="toc"
+      node-key="slug"
       :default-expand-all="true"
       :props="defaultProps"
       :expand-on-click-node="false"
       :indent="10"
       :icon="ArrowRight"
       @node-click="handleClick"
-    />
+      @node-contextmenu="handleContextMenu"
+    >
+      <template #default="{ data }">
+        <span :style="{ color: `var(--h${Math.min(6, Math.max(1, data.lvl || 6))}Color)` }">{{ data.label }}</span>
+      </template>
+    </el-tree>
   </div>
 </template>
 
@@ -24,6 +31,7 @@ import { useEditorStore } from '@/store/editor'
 import { usePreferencesStore } from '@/store/preferences'
 import bus from '../../bus'
 import { storeToRefs } from 'pinia'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight } from '@element-plus/icons-vue'
 
@@ -39,6 +47,12 @@ const defaultProps = {
 
 const { toc } = storeToRefs(editorStore)
 const { wordWrapInToc } = storeToRefs(preferencesStore)
+interface TreeNodeControl {
+  expanded: boolean
+  expand: (callback?: (() => void) | null, expandParent?: boolean) => void
+  collapse: () => void
+}
+const tree = ref<{ getNode?: (key: string) => TreeNodeControl | null } | null>(null)
 
 const handleClick = (data: { slug?: unknown }): void => {
   // editor.vue builds a CSS selector with `#${slug}` — bail out if the
@@ -46,6 +60,15 @@ const handleClick = (data: { slug?: unknown }): void => {
   // `undefined` / non-string payloads and producing `#undefined` selectors.
   if (typeof data.slug !== 'string' || data.slug.length === 0) return
   bus.emit('scroll-to-header', data.slug)
+}
+
+const handleContextMenu = (event: MouseEvent, data: { slug?: unknown }): void => {
+  event.preventDefault()
+  if (typeof data.slug !== 'string' || !data.slug) return
+  const node = tree.value?.getNode?.(data.slug)
+  if (!node) return
+  if (node.expanded) node.collapse()
+  else node.expand(null, false)
 }
 </script>
 

@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="editorWrapperRef"
     class="editor-wrapper"
     :class="[{ typewriter: typewriter, focus: focus, source: sourceCode }]"
     :style="{
@@ -11,6 +12,8 @@
     }"
     :dir="textDirection"
   >
+    <div class="editor-margin-handle left" @pointerdown="startMarginDrag('left', $event)" />
+    <div class="editor-margin-handle right" @pointerdown="startMarginDrag('right', $event)" />
     <div
       ref="editorRef"
       class="editor-component"
@@ -141,6 +144,26 @@ const props = defineProps<{
 
 // Get stores
 const preferencesStore = usePreferencesStore()
+const editorWrapperRef = ref<HTMLElement | null>(null)
+const startMarginDrag = (side: 'left' | 'right', event: PointerEvent): void => {
+  const wrapper = editorWrapperRef.value
+  if (!wrapper) return
+  event.preventDefault()
+  ;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId)
+  const persist = (moveEvent: PointerEvent): void => {
+    const rect = wrapper.getBoundingClientRect()
+    const margin = side === 'left' ? moveEvent.clientX - rect.left : rect.right - moveEvent.clientX
+    const areaWidth = Math.max(500, Math.min(rect.width, rect.width - 2 * margin))
+    preferencesStore.SET_SINGLE_PREFERENCE({ type: 'editorLineWidth', value: `${Math.round(areaWidth - 100)}px` })
+  }
+  const stop = (upEvent: PointerEvent): void => {
+    persist(upEvent)
+    window.removeEventListener('pointermove', persist)
+    window.removeEventListener('pointerup', stop)
+  }
+  window.addEventListener('pointermove', persist)
+  window.addEventListener('pointerup', stop)
+}
 const editorStore = useEditorStore()
 const projectStore = useProjectStore()
 
@@ -1391,6 +1414,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+.editor-wrapper { position: relative; }
+.editor-margin-handle { position: absolute; top: 0; bottom: 0; width: 10px; z-index: 3; cursor: ew-resize; }
+.editor-margin-handle.left { left: calc(50% - var(--editorAreaWidth) / 2); }
+.editor-margin-handle.right { right: calc(50% - var(--editorAreaWidth) / 2); }
+.editor-margin-handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; border-left: 1px dashed transparent; }
+.editor-margin-handle:hover::after { border-left-color: var(--editorColor50); }
 /* ... existing style ... */
 .editor-wrapper {
   height: 100%;

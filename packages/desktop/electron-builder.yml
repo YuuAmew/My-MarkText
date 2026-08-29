@@ -1,5 +1,8 @@
-appId: com.github.marktext.marktext
-productName: marktext
+appId: com.github.marktext.mymarktext
+productName: MyMarkText
+extraMetadata:
+  name: mymarktext
+  productName: MyMarkText
 directories:
   buildResources: build
   output: ../../dist
@@ -90,15 +93,22 @@ fileAssociations:
     mimeType: text/markdown
     role: Editor
     icon: icons/md.ico
+  - ext: mdx
+    name: MyMarkText Markdown Document
+    description: MyMarkText Markdown document
+    mimeType: text/markdown
+    role: Editor
+    icon: icons/md.ico
 win:
-  executableName: marktext
-  artifactName: 'marktext-win-${arch}-${version}.${ext}'
+  executableName: MyMarkText
+  artifactName: 'MyMarkText-win-${arch}-${version}.${ext}'
+  signAndEditExecutable: false
   target:
     - target: 'nsis'
     - target: 'zip'
   icon: static/icon.ico
 nsis:
-  artifactName: 'marktext-win-${arch}-${version}-setup.${ext}'
+  artifactName: 'MyMarkText-win-${arch}-${version}-setup.${ext}'
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: true

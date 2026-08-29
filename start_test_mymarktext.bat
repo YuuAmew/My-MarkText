@@ -1,8 +1,9 @@
 @echo off
 setlocal
 
-rem Start the unmodified MarkText 0.19.1 source tree in this folder.
-rem This launcher does not enable MyMarkText monitoring or test instrumentation.
+rem Start the MyMarkText development build in this folder.
+rem PERF_TESTING only loads locale files from this source tree. No monitoring
+rem or user-operation logging exists in this reborn project.
 set "ROOT=%~dp0"
 set "APPDIR=%ROOT%packages\desktop"
 set "ELECTRON="
@@ -14,8 +15,8 @@ for /d %%D in ("%ROOT%node_modules\.pnpm\electron@*") do (
 )
 
 if not exist "%APPDIR%\out\main\index.js" (
-  echo [Error] The original test build has not been created yet.
-  echo Please run the original build first.
+  echo [Error] The test build has not been created yet.
+  echo Please build the project first.
   pause
   exit /b 1
 )
@@ -28,5 +29,6 @@ if not defined ELECTRON (
 )
 
 cd /d "%APPDIR%"
-start "Original MarkText 0.19.1" "%ELECTRON%" .
+set "PERF_TESTING=true"
+start "MyMarkText test" "%ELECTRON%" .
 endlocal

@@ -10,6 +10,14 @@ const writeLine = (s: string): boolean => write(s + '\n')
 
 const cli = (): ParsedArgs => {
   let argv = process.argv.slice(1)
+  // `electron .` is the unpackaged test launcher. Its bootstrap path is not
+  // a user-requested document and must not prevent session restoration.
+  if (process.defaultApp && argv.length > 0) {
+    const bootstrapPath = argv[0]
+    if (bootstrapPath && path.resolve(bootstrapPath) === app.getAppPath()) {
+      argv = argv.slice(1)
+    }
+  }
   if (process.env.NODE_ENV === 'development') {
     // Don't pass electron development arguments to MarkText and change user data path.
     argv = ['--user-data-dir', path.join(getPath('appData'), 'marktext-dev')]
