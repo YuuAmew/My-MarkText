@@ -11,12 +11,13 @@
       ref="tree"
       :data="toc"
       node-key="slug"
-      :default-expand-all="true"
       :props="defaultProps"
       :expand-on-click-node="false"
       :indent="10"
       :icon="ArrowRight"
       @node-click="handleClick"
+      @node-expand="handleExpand"
+      @node-collapse="handleCollapse"
       @node-contextmenu="handleContextMenu"
     >
       <template #default="{ data }">
@@ -31,7 +32,7 @@ import { useEditorStore } from '@/store/editor'
 import { usePreferencesStore } from '@/store/preferences'
 import bus from '../../bus'
 import { storeToRefs } from 'pinia'
-import { ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight } from '@element-plus/icons-vue'
 
@@ -45,7 +46,7 @@ const defaultProps = {
   label: 'label'
 }
 
-const { toc } = storeToRefs(editorStore)
+const { toc, currentFile } = storeToRefs(editorStore)
 const { wordWrapInToc } = storeToRefs(preferencesStore)
 interface TreeNodeControl {
   expanded: boolean
@@ -54,6 +55,37 @@ interface TreeNodeControl {
 }
 const tree = ref<{ getNode?: (key: string) => TreeNodeControl | null } | null>(null)
 
+const getSlugs = (): string[] => {
+  const result: string[] = []
+  const visit = (nodes: typeof toc.value): void => {
+    for (const node of nodes) {
+      if (typeof node.slug === 'string' && node.slug.length) result.push(node.slug)
+      visit(node.children)
+    }
+  }
+  visit(toc.value)
+  return result
+}
+
+const restoreExpandedState = async (): Promise<void> => {
+  const file = currentFile.value
+  if (!file || !toc.value.length) return
+  await nextTick()
+  const allSlugs = getSlugs()
+  const expanded = new Set((file.tocExpandedSlugs ?? allSlugs).filter((slug) => allSlugs.includes(slug)))
+  for (const slug of allSlugs) {
+    const node = tree.value?.getNode?.(slug)
+    if (!node) continue
+    if (expanded.has(slug)) node.expand(null, false)
+    else node.collapse()
+  }
+  if (file.tocExpandedSlugs === undefined) editorStore.SET_TOC_EXPANDED_SLUGS(allSlugs)
+}
+
+watch([toc, currentFile], () => {
+  void restoreExpandedState()
+}, { deep: false, immediate: true })
+
 const handleClick = (data: { slug?: unknown }): void => {
   // editor.vue builds a CSS selector with `#${slug}` — bail out if the
   // node has no slug (e.g. unsluggable headings) to avoid emitting
@@ -61,6 +93,24 @@ const handleClick = (data: { slug?: unknown }): void => {
   if (typeof data.slug !== 'string' || data.slug.length === 0) return
   bus.emit('scroll-to-header', data.slug)
 }
+
+const updateExpandedState = (data: { slug?: unknown }, expanded: boolean): void => {
+  if (typeof data.slug !== 'string' || !data.slug) return
+  const current = new Set(currentFile.value?.tocExpandedSlugs ?? getSlugs())
+  if (expanded) current.add(data.slug)
+  else current.delete(data.slug)
+  editorStore.SET_TOC_EXPANDED_SLUGS([...current])
+}
+
+const handleExpand = (data: { slug?: unknown }): void => updateExpandedState(data, true)
+const handleCollapse = (data: { slug?: unknown }): void => updateExpandedState(data, false)
+
+const syncExpandedStateFromTree = (): void => {
+  const expanded = getSlugs().filter((slug) => tree.value?.getNode?.(slug)?.expanded === true)
+  editorStore.SET_TOC_EXPANDED_SLUGS(expanded)
+}
+
+bus.on('mt::sync-toc-expanded-state', syncExpandedStateFromTree)
 
 const handleContextMenu = (event: MouseEvent, data: { slug?: unknown }): void => {
   event.preventDefault()

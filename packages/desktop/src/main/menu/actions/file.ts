@@ -220,32 +220,27 @@ const showUnsavedFilesMessage = async(
   win: BrowserWindow,
   files: UnsavedFile[]
 ): Promise<{ needSave: boolean } | null> => {
-  const { response } = await dialog.showMessageBox(win, {
-    type: 'warning',
-    buttons: [t('dialog.save'), t('dialog.dontSave'), t('dialog.cancel')],
-    defaultId: 0,
-    message: t('dialog.saveChanges', {
-      count: files.length,
-      type: files.length === 1 ? t('dialog.file') : t('dialog.files'),
-      files: files.map((f) => f.filename).join('\n')
-    }),
-    detail: t('dialog.changesWillBeLost'),
-    cancelId: 2,
-    noLink: true
+  const requestId = `unsaved-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return new Promise((resolve) => {
+    const onResponse = (
+      _event: Electron.IpcMainEvent,
+      id: string,
+      response: 'save' | 'dontSave' | 'cancel'
+    ): void => {
+      if (id !== requestId) return
+      ipcMain.removeListener('mt::unsaved-files-confirm-response', onResponse)
+      resolve(response === 'save' ? { needSave: true } : response === 'dontSave' ? { needSave: false } : null)
+    }
+    ipcMain.on('mt::unsaved-files-confirm-response', onResponse)
+    win.webContents.once('destroyed', () => {
+      ipcMain.removeListener('mt::unsaved-files-confirm-response', onResponse)
+      resolve(null)
+    })
+    win.webContents.send('mt::show-unsaved-files-confirm', {
+      requestId,
+      filenames: files.map((file) => file.filename)
+    })
   })
-
-  switch (response) {
-    case 0:
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({ needSave: true })
-        })
-      })
-    case 1:
-      return { needSave: false }
-    default:
-      return null
-  }
 }
 
 const noticePandocNotFound = (win: BrowserWindow): void => {

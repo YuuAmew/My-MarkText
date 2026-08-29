@@ -2,6 +2,7 @@ import equal from 'deep-equal'
 import bus from '../bus'
 import { getUniqueId, deepClone } from '../util'
 import listToTree, { type ListItem, type TreeNode } from '../util/listToTree'
+import { appendTocState, extractTocState } from '../util/tocState'
 import {
   createDocumentState,
   getOptionsFromState,
@@ -143,6 +144,31 @@ export const useEditorStore = defineStore('editor', {
   }),
 
   actions: {
+    /** The private TOC section is added only at the file-writing boundary. */
+    getMarkdownWithTocState(tab: IFileState): string {
+      if (tab.id === this.currentFile?.id) bus.emit('mt::sync-toc-expanded-state')
+      const currentSlugs = tab.id === this.currentFile?.id
+        ? this.listToc.map((item) => item.slug).filter((slug): slug is string => typeof slug === 'string' && slug.length > 0)
+        // A delayed auto-save can run just after switching tabs. Its headings
+        // are no longer mounted, so retain the last verified set instead of
+        // accidentally treating every stored heading as stale.
+        : (tab.tocStoredExpandedSlugs ?? tab.tocExpandedSlugs ?? [])
+      const expandedSlugs = tab.tocExpandedSlugs ?? currentSlugs
+      const markdown = appendTocState(tab.markdown, expandedSlugs, currentSlugs)
+      tab.tocStoredExpandedSlugs = expandedSlugs.filter((slug) => currentSlugs.includes(slug))
+      return markdown
+    },
+
+    getMarkdownForAutoSave(tab: IFileState): string {
+      return this.getMarkdownWithTocState(tab)
+    },
+
+    SET_TOC_EXPANDED_SLUGS(slugs: string[]): void {
+      if (!this.currentFile) return
+      this.currentFile.tocExpandedSlugs = [...new Set(slugs)]
+      debouncedSendBufferedState()
+    },
+
     updateTabIdToIndex(): void {
       this.tabIdToIndex = this.tabs.reduce<Record<string, number>>((map, tab, index) => {
         map[tab.id] = index
@@ -165,7 +191,14 @@ export const useEditorStore = defineStore('editor', {
 
       const oldIdToNewId: Record<string, string> = {}
       const tabs: IFileState[] = bufferedEditorState.tabs.map((tab) => {
-        const fileState = createDocumentState(tab as unknown as Record<string, unknown>)
+        const tocState = extractTocState(tab.markdown)
+        const fileState = createDocumentState({
+          ...(tab as unknown as Record<string, unknown>),
+          markdown: tocState.markdown,
+          ...(tocState.expandedSlugs === undefined
+            ? {}
+            : { tocExpandedSlugs: tocState.expandedSlugs, tocStoredExpandedSlugs: tocState.expandedSlugs })
+        })
         oldIdToNewId[tab.id] = fileState.id
         return fileState
       })
@@ -479,7 +512,8 @@ export const useEditorStore = defineStore('editor', {
     FILE_SAVE(): void {
       if (!this.currentFile) return
       const projectStore = useProjectStore()
-      const { id, filename, pathname, markdown } = this.currentFile
+      const { id, filename, pathname } = this.currentFile
+      const markdown = this.getMarkdownWithTocState(this.currentFile)
       const options = getOptionsFromState(this.currentFile)
       const defaultPath = getRootFolderFromState(projectStore)
       if (id) {
@@ -508,7 +542,8 @@ export const useEditorStore = defineStore('editor', {
     FILE_SAVE_AS(): void {
       if (!this.currentFile) return
       const projectStore = useProjectStore()
-      const { id, filename, pathname, markdown } = this.currentFile
+      const { id, filename, pathname } = this.currentFile
+      const markdown = this.getMarkdownWithTocState(this.currentFile)
       const options = getOptionsFromState(this.currentFile)
       const defaultPath = getRootFolderFromState(projectStore)
 
@@ -1267,18 +1302,25 @@ export const useEditorStore = defineStore('editor', {
       }
 
       const { markdown, isMixedLineEndings } = markdownDocument
+      const tocState = extractTocState(markdown)
       const docState = createDocumentState(
         Object.assign(
           {},
           markdownDocument as unknown as Record<string, unknown>,
-          options as Record<string, unknown>
+          options as Record<string, unknown>,
+          {
+            markdown: tocState.markdown,
+            ...(tocState.expandedSlugs === undefined
+              ? {}
+              : { tocExpandedSlugs: tocState.expandedSlugs, tocStoredExpandedSlugs: tocState.expandedSlugs })
+          }
         )
       )
       const { id, cursor } = docState
 
       if (selected) {
         this.UPDATE_CURRENT_FILE(docState)
-        bus.emit('file-loaded', { id, markdown, cursor })
+        bus.emit('file-loaded', { id, markdown: tocState.markdown, cursor })
       } else {
         this.tabs.push(docState)
         this.updateTabIdToIndex()
@@ -1391,7 +1433,7 @@ export const useEditorStore = defineStore('editor', {
             id,
             filename,
             pathname,
-            markdown,
+            markdown: this.getMarkdownForAutoSave(tab),
             options
           })
         }
@@ -1916,6 +1958,8 @@ interface BufferedTabState {
   wordCount: IFileState['wordCount']
   muyaIndexCursor: unknown
   scrollTop: number
+  tocExpandedSlugs?: string[]
+  tocStoredExpandedSlugs?: string[]
 }
 
 const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): BufferedTabState => {
@@ -1935,7 +1979,13 @@ const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): Buff
     cursor: toSerializableValue(tab.cursor, defaultFileState.cursor),
     wordCount: toSerializableValue(tab.wordCount, defaultFileState.wordCount),
     muyaIndexCursor: toSerializableValue(tab.muyaIndexCursor, defaultFileState.muyaIndexCursor),
-    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop
+    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop,
+    ...(Array.isArray(tab.tocExpandedSlugs)
+      ? { tocExpandedSlugs: tab.tocExpandedSlugs.filter((slug): slug is string => typeof slug === 'string') }
+      : {}),
+    ...(Array.isArray(tab.tocStoredExpandedSlugs)
+      ? { tocStoredExpandedSlugs: tab.tocStoredExpandedSlugs.filter((slug): slug is string => typeof slug === 'string') }
+      : {})
   }
 }
 

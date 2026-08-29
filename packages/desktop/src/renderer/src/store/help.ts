@@ -83,7 +83,9 @@ const documentStateKeys = [
   'searchMatches',
   'scrollTop',
   'muyaIndexCursor',
-  'notifications'
+  'notifications',
+  'tocExpandedSlugs',
+  'tocStoredExpandedSlugs'
 ] as const satisfies ReadonlyArray<keyof IFileState>
 
 export const getBlankFileState = (

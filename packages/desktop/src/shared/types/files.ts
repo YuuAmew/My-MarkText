@@ -84,6 +84,8 @@ export interface IFileState {
   scrollTop: number
   muyaIndexCursor: unknown
   notifications: FileNotification[]
+  tocExpandedSlugs?: string[]
+  tocStoredExpandedSlugs?: string[]
   lastSavedHistoryId?: number
   // Muya block tree; only populated for the actively edited tab.
   blocks?: unknown

@@ -90,6 +90,7 @@ export interface IpcInvokeChannels {
 // =================================================================
 
 export interface IpcSendChannels {
+  'mt::unsaved-files-confirm-response': [requestId: string, response: 'save' | 'dontSave' | 'cancel']
   'app-create-editor-window': [config?: unknown]
   'app-create-settings-window': []
   'app-open-directory-by-id': [windowId: number, dirPath: string]
@@ -214,6 +215,7 @@ export interface IpcSyncChannels {
 // =================================================================
 
 export interface IpcMainEventChannels {
+  'mt::show-unsaved-files-confirm': [payload: { requestId: string, filenames: string[] }]
   'language-changed': [language: string]
   'mt::UPDATE_AVAILABLE': [info?: unknown]
   'mt::UPDATE_DOWNLOADED': [info?: unknown]
