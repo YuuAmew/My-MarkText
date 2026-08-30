@@ -47,7 +47,21 @@ class ExportMarkdown {
         case 'p':
         case 'hr': {
           this.insertLineBreak(result, indent)
-          result.push(this.translateBlocks2Markdown(block.children, indent))
+          const onlyChild = block.children.length === 1 ? block.children[0] : null
+          // Mark only a true, standalone root-level blank paragraph. Do not
+          // reinterpret blank lines inside normal paragraphs or list items.
+          if (
+            block.type === 'p' &&
+            !block.parent &&
+            onlyChild &&
+            onlyChild.type === 'span' &&
+            typeof onlyChild.text === 'string' &&
+            onlyChild.text.trim() === ''
+          ) {
+            result.push(`${indent}<!--b-->\n`)
+          } else {
+            result.push(this.translateBlocks2Markdown(block.children, indent))
+          }
           break
         }
         case 'span': {

@@ -295,6 +295,16 @@ const importRegister = (ContentState) => {
 
         case 'html': {
           const text = token.text.trim()
+          // `<!--b-->` is MyMarkText's explicit, standalone blank paragraph.
+          // It is intentionally accepted only at document root: list items and
+          // paragraph-internal newlines keep original MarkText semantics.
+          if (text === '<!--b-->' && parentList[0].type === 'root') {
+            block = this.createBlock('p')
+            const contentBlock = this.createBlock('span', { text: '' })
+            this.appendChild(block, contentBlock)
+            this.appendChild(parentList[0], block)
+            break
+          }
           // TODO: Treat html block which only contains one img as paragraph, we maybe add image block in the future.
           const isSingleImage = /^<img[^<>]+>$/.test(text)
           if (isSingleImage) {
