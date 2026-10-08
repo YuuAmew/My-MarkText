@@ -23,6 +23,7 @@
         :markdown="markdown"
         :cursor="cursor"
         :muya-index-cursor="muyaIndexCursor"
+        :scroll-top="scrollTop"
         :source-code="sourceCode"
         :show-tab-bar="showTabBar"
         :text-direction="textDirection"
@@ -90,6 +91,7 @@ const isSaved = computed(() => currentFile.value?.isSaved)
 // type is `string`. The `<editor-with-tabs>` mount is still gated.
 const markdown = computed<string>(() => currentFile.value?.markdown ?? '')
 const cursor = computed(() => currentFile.value?.cursor)
+const scrollTop = computed(() => currentFile.value?.scrollTop)
 const wordCount = computed(() => currentFile.value?.wordCount)
 // `muyaIndexCursor` is loosely typed as `unknown` on the editor store; the
 // downstream prop expects `Object | undefined`. Cast at the boundary.

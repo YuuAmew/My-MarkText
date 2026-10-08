@@ -138,6 +138,8 @@ type ElInputNumberInstance = any
 const props = defineProps<{
   markdown?: string
   cursor?: unknown
+  muyaIndexCursor?: unknown
+  scrollTop?: number
   textDirection: string
   platform?: string
 }>()
@@ -1178,6 +1180,13 @@ const resizeObserverForEditor = new ResizeObserver(handleResetPaddingBottom)
 onMounted(() => {
   printer = new Printer()
   const ele = editorRef.value
+  // Keep a snapshot before Muya's constructor emits its first asynchronous
+  // change event. That event represents Muya's default first-line caret, not
+  // the cursor restored from the previous application session.
+  const initialMarkdown = props.markdown
+  const initialCursor = props.cursor
+  const initialMuyaIndexCursor = props.muyaIndexCursor
+  const initialScrollTop = props.scrollTop
 
   // use muya UI plugins
   Muya.use(TablePicker)
@@ -1300,6 +1309,20 @@ onMounted(() => {
       )
     }
   })
+
+  // `new Muya()` queues a default-caret change event. Let that event finish
+  // first, then restore the saved cursor snapshot. Without this deferred
+  // second pass, only the first (initially mounted) tab loses its caret while
+  // tabs selected afterwards correctly go through `file-changed`.
+  setTimeout(() => {
+    if (!editor.value) return
+    if (initialCursor || initialMuyaIndexCursor) {
+      editor.value.setMarkdown(initialMarkdown, initialCursor, true, initialMuyaIndexCursor)
+    }
+    if (typeof initialScrollTop === 'number') {
+      scrollToCords(initialScrollTop)
+    }
+  }, 0)
 
   editor.value.on('scroll', (scrollEvent: { scrollTop: number }) => {
     if (currentFile.value) {

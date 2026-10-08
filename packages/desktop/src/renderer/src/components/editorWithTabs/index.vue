@@ -8,6 +8,8 @@
       <editor
         :markdown="markdown"
         :cursor="cursor"
+        :muya-index-cursor="muyaIndexCursor"
+        :scroll-top="scrollTop"
         :text-direction="textDirection"
         :platform="platform"
       />
@@ -37,6 +39,7 @@ defineProps<{
   // caller to widen.
   cursor: unknown
   muyaIndexCursor?: unknown
+  scrollTop?: number
   sourceCode: boolean
   showTabBar: boolean
   textDirection: string
