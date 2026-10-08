@@ -105,6 +105,30 @@ const inputCtrl = (ContentState) => {
     const block = this.getBlock(key)
     const paragraph = document.querySelector(`#${key}`)
 
+    // A structural Backspace (for example merging list items or turning a
+    // heading back into a paragraph) can remove the DOM block before the
+    // browser delivers its trailing `input` event. In that event the
+    // Selection API still points at the removed key. Do not treat that stale
+    // key as an editable block: redraw from the already-updated state and
+    // restore a valid caret instead.
+    if (!block || !paragraph) {
+      const cursorBlock = this.cursor && this.cursor.start
+        ? this.getBlock(this.cursor.start.key)
+        : null
+      if (!cursorBlock) {
+        if (!this.blocks.length) this.blocks = [this.createBlockP()]
+        const fallback = this.getFirstBlock()
+        const offset = fallback.text.length
+        this.cursor = {
+          start: { key: fallback.key, offset },
+          end: { key: fallback.key, offset },
+          isEdit: true
+        }
+      }
+      this.render()
+      return
+    }
+
     // Fix issue 1447
     // Fixme: any better solution?
     if (

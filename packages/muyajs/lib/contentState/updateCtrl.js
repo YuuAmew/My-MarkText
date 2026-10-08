@@ -66,6 +66,11 @@ const updateCtrl = (ContentState) => {
    * block must be span block.
    */
   ContentState.prototype.checkInlineUpdate = function(block) {
+    // A browser `input` event can arrive after a structural delete removed
+    // the referenced block. There is no inline syntax to update in that
+    // transient state.
+    if (!block) return false
+
     // table cell can not have blocks in it
     if (/figure/.test(block.type)) {
       return false
@@ -79,6 +84,7 @@ const updateCtrl = (ContentState) => {
     if (block.type === 'span') {
       line = block
       block = this.getParent(block)
+      if (!block) return false
     }
     const listItem = this.getParent(block)
     const [
@@ -619,6 +625,7 @@ const updateCtrl = (ContentState) => {
   }
 
   ContentState.prototype.updateToParagraph = function(block, line) {
+    if (!block || !line) return null
     if (/^h\d$/.test(block.type) && block.headingStyle === 'setext') {
       return null
     }
