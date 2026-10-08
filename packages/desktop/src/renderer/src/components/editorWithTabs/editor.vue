@@ -1253,6 +1253,14 @@ onMounted(() => {
 
   const { container } = editor.value
 
+  // Do not let the initial tab paint at the top of the document and then
+  // visibly jump to its restored viewport. `scrollToCords()` reveals this
+  // container after it has applied the saved position on the next frame.
+  if (typeof initialScrollTop === 'number' && initialScrollTop > 0) {
+    container.style.visibility = 'hidden'
+    container.style.pointerEvents = 'none'
+  }
+
   // Listen for language changes and update Muya's translation function
   bus.on('language-changed', handleLanguageChanged)
 
