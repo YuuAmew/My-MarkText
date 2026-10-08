@@ -196,7 +196,35 @@ class Muya {
   ) {
     let finalCursor = null
 
-    if (blocks && cursor) {
+    const markerLines = markdown.split('\n')
+    const isStandaloneBlankMarker = (line) => typeof line === 'string' && line.trim() === '<!--b-->'
+    const markerCursor =
+      muyaIndexCursor &&
+      muyaIndexCursor.anchor &&
+      muyaIndexCursor.focus &&
+      muyaIndexCursor.anchor.line === muyaIndexCursor.focus.line &&
+      isStandaloneBlankMarker(markerLines[muyaIndexCursor.anchor.line])
+
+    if (markerCursor) {
+      // Do not inject cursor DNA into `<!--b-->`. The marker is HTML, and
+      // even a temporary insertion can make the lexer treat it as visible
+      // HTML. Parse the document normally, then locate the corresponding
+      // root-level blank paragraph by its marker ordinal.
+      this.contentState.importMarkdown(markdown)
+      const markerOrdinal = markerLines
+        .slice(0, muyaIndexCursor.anchor.line + 1)
+        .filter(isStandaloneBlankMarker)
+        .length
+      const blankParagraphs = this.contentState.getBlocks().filter((block) => {
+        const onlyChild = block.type === 'p' && block.children.length === 1 ? block.children[0] : null
+        return !block.parent && onlyChild && onlyChild.type === 'span' && onlyChild.text === ''
+      })
+      const contentBlock = blankParagraphs[markerOrdinal - 1]?.children[0]
+      if (contentBlock) {
+        const position = { key: contentBlock.key, offset: 0 }
+        finalCursor = { anchor: position, focus: position, start: position, end: position }
+      }
+    } else if (blocks && cursor) {
       // We have blocks and a cursor, so we can set the blocks and the cursor in the contentState.
       finalCursor = cursor
       this.contentState.setBlocks(JSON.parse(JSON.stringify(blocks)))

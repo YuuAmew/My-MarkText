@@ -298,9 +298,21 @@ const importRegister = (ContentState) => {
           // `<!--b-->` is MyMarkText's explicit, standalone blank paragraph.
           // It is intentionally accepted only at document root: list items and
           // paragraph-internal newlines keep original MarkText semantics.
-          if (text === '<!--b-->' && parentList[0].type === 'root') {
+          // A background tab restores its caret by temporarily inserting the
+          // cursor DNA into the target markdown line. When that target is a
+          // blank marker, the DNA makes the raw HTML no longer equal to
+          // `<!--b-->`. Ignore the DNA for identification, but retain it in
+          // the editable span so convertMuyaIndexCursortoCursor can restore
+          // the caret and then remove the DNA again.
+          const blankMarkerText = text
+            .replace(CURSOR_ANCHOR_DNA, '')
+            .replace(CURSOR_FOCUS_DNA, '')
+          if (blankMarkerText === '<!--b-->' && parentList[0].type === 'root') {
             block = this.createBlock('p')
-            const contentBlock = this.createBlock('span', { text: '' })
+            const cursorDNA =
+              (text.includes(CURSOR_ANCHOR_DNA) ? CURSOR_ANCHOR_DNA : '') +
+              (text.includes(CURSOR_FOCUS_DNA) ? CURSOR_FOCUS_DNA : '')
+            const contentBlock = this.createBlock('span', { text: cursorDNA })
             this.appendChild(block, contentBlock)
             this.appendChild(parentList[0], block)
             break
@@ -569,6 +581,37 @@ const importRegister = (ContentState) => {
     }
     const anchorCh = getSafeOffset(anchor.ch, anchorText)
     const focusCh = getSafeOffset(focus.ch, focusText)
+    const isBlankMarker = (text) => text.trim() === '<!--b-->'
+
+    // A standalone blank marker has no editable character positions. Placing
+    // cursor DNA at an arbitrary restored column would split the HTML comment
+    // (for example `<!--b<DNA>-->`) before the HTML parser gets a chance to
+    // recognize it. Keep all DNA before the marker; the lexer preserves that
+    // prefix on the HTML token and the blank-marker branch below restores it
+    // into the empty paragraph.
+    if (anchor.line === focus.line && isBlankMarker(anchorText)) {
+      const signatures = anchorCh <= focusCh
+        ? CURSOR_ANCHOR_DNA + CURSOR_FOCUS_DNA
+        : CURSOR_FOCUS_DNA + CURSOR_ANCHOR_DNA
+      lines[anchor.line] = signatures + anchorText
+      return {
+        markdown: lines.join('\n'),
+        isValid: true
+      }
+    }
+
+    if (anchor.line !== focus.line && (isBlankMarker(anchorText) || isBlankMarker(focusText))) {
+      lines[anchor.line] = isBlankMarker(anchorText)
+        ? CURSOR_ANCHOR_DNA + anchorText
+        : anchorText.substring(0, anchorCh) + CURSOR_ANCHOR_DNA + anchorText.substring(anchorCh)
+      lines[focus.line] = isBlankMarker(focusText)
+        ? CURSOR_FOCUS_DNA + focusText
+        : focusText.substring(0, focusCh) + CURSOR_FOCUS_DNA + focusText.substring(focusCh)
+      return {
+        markdown: lines.join('\n'),
+        isValid: true
+      }
+    }
 
     if (anchor.line === focus.line) {
       const minOffset = Math.min(anchorCh, focusCh)
