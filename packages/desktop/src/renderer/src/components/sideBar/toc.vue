@@ -3,9 +3,6 @@
     class="side-bar-toc"
     :class="[{ 'side-bar-toc-overflow': !wordWrapInToc, 'side-bar-toc-wordwrap': wordWrapInToc }]"
   >
-    <div class="title">
-      {{ t('sideBar.toc.title') }}
-    </div>
     <el-tree
       v-if="toc.length"
       ref="tree"
@@ -33,10 +30,7 @@ import { usePreferencesStore } from '@/store/preferences'
 import bus from '../../bus'
 import { storeToRefs } from 'pinia'
 import { nextTick, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { ArrowRight } from '@element-plus/icons-vue'
-
-const { t } = useI18n()
 
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
@@ -132,14 +126,6 @@ const handleContextMenu = (event: MouseEvent, data: { slug?: unknown }): void =>
   flex-direction: column;
 }
 
-.side-bar-toc .title {
-  color: var(--sideBarTitleColor);
-  font-weight: 600;
-  font-size: 16px;
-  margin: 37px 0 10px 0;
-  padding-left: 25px;
-}
-
 .side-bar-toc .el-tree-node {
   margin-top: 8px;
 }
@@ -147,6 +133,9 @@ const handleContextMenu = (event: MouseEvent, data: { slug?: unknown }): void =>
 .side-bar-toc .el-tree {
   background: transparent;
   color: var(--sideBarColor);
+  /* Keep the first bookmark below the W/C/P status row without restoring
+     the removed "Table Of Contents" title. */
+  margin-top: 28px;
 }
 
 .side-bar-toc .el-tree-node:focus > .el-tree-node__content {
