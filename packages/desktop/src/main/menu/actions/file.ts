@@ -19,6 +19,13 @@ import type { CommandManager } from '../../commands'
 import { EXTENSION_HASN, PANDOC_EXTENSIONS, URL_REG } from '../../config'
 import { normalizeAndResolvePath, writeFile } from '../../filesystem'
 import { writeMarkdownFile } from '../../filesystem/markdown'
+import {
+  cleanupManagedImages,
+  moveManagedImageOwnership,
+  promoteTemporaryImages,
+  registerDocumentImages,
+  registerManagedImage
+} from '../../filesystem/managedImages'
 import { getPath, getRecommendTitleFromMarkdownString } from '../../utils'
 import pandoc from '../../utils/pandoc'
 import { t } from '../../i18n'
@@ -31,6 +38,26 @@ interface PageOptions {
   pageSizeWidth?: number
   pageSizeHeight?: number
   isLandscape?: boolean
+}
+
+const writeMarkdownWithPromotedTemporaryImages = async(
+  filePath: string,
+  markdown: string,
+  options: Parameters<typeof writeMarkdownFile>[2]
+): Promise<string> => {
+  const promotion = await promoteTemporaryImages(markdown)
+  await writeMarkdownFile(filePath, promotion.markdown, options)
+
+  // The file is now safely on disk. Register the new files before later
+  // cleanup runs, then remove their temporary originals. A failure to remove
+  // a temp file must never turn a successful document save into an error.
+  await Promise.all(promotion.destinationPaths.map((imagePath) => registerManagedImage(filePath, imagePath)))
+  try {
+    await promotion.finalize()
+  } catch (error) {
+    log.warn('Unable to remove promoted temporary image:', error)
+  }
+  return promotion.markdown
 }
 
 // TODO(refactor): "save" and "save as" should be moved to the editor window (editor.js) and
@@ -195,8 +222,10 @@ const handleResponseForSave = async(
   // requires the strict `MarkdownDocumentOptions` shape — the renderer always
   // populates every field for the unsaved-file dialog payload, so the cast
   // is safe at this seam.
-  return writeMarkdownFile(filePath, markdown, options as Parameters<typeof writeMarkdownFile>[2])
-    .then(() => {
+  return writeMarkdownWithPromotedTemporaryImages(filePath, markdown, options as Parameters<typeof writeMarkdownFile>[2])
+    .then(async(savedMarkdown) => {
+      if (pathname && pathname !== filePath) await moveManagedImageOwnership(pathname, filePath)
+      await cleanupManagedImages(filePath, savedMarkdown)
       if (!alreadyExistOnDisk) {
         ipcMain.emit('window-add-file-path', win.id, filePath)
         ipcMain.emit('menu-add-recently-used', filePath)
@@ -206,6 +235,9 @@ const handleResponseForSave = async(
       } else {
         ipcMain.emit('window-file-saved', win.id, filePath)
         win.webContents.send('mt::tab-saved', id)
+      }
+      if (savedMarkdown !== markdown) {
+        win.webContents.send('mt::temporary-images-promoted', id, savedMarkdown)
       }
       return id
     })
@@ -355,8 +387,10 @@ ipcMain.on(
 
     if (filePath && !canceled) {
       filePath = path.resolve(filePath)
-      writeMarkdownFile(filePath, markdown, options as Parameters<typeof writeMarkdownFile>[2])
-        .then(() => {
+      writeMarkdownWithPromotedTemporaryImages(filePath, markdown, options as Parameters<typeof writeMarkdownFile>[2])
+        .then(async(savedMarkdown) => {
+          if (pathname && pathname !== filePath) await moveManagedImageOwnership(pathname, filePath)
+          await cleanupManagedImages(filePath, savedMarkdown)
           if (!alreadyExistOnDisk) {
             ipcMain.emit('window-add-file-path', win.id, filePath)
             ipcMain.emit('menu-add-recently-used', filePath)
@@ -380,6 +414,9 @@ ipcMain.on(
           } else {
             ipcMain.emit('window-file-saved', win.id, filePath)
             win.webContents.send('mt::tab-saved', id)
+          }
+          if (savedMarkdown !== markdown) {
+            win.webContents.send('mt::temporary-images-promoted', id, savedMarkdown)
           }
         })
         .catch((err: unknown) => {
@@ -443,6 +480,18 @@ ipcMain.on('mt::close-window-confirm', async(e, unsavedFiles: UnsavedFile[]) => 
 })
 
 ipcMain.on('mt::response-file-save', handleResponseForSave as Parameters<typeof ipcMain.on>[1])
+
+ipcMain.on('mt::managed-image-created', (_event, documentPath: string, imagePath: string) => {
+  registerManagedImage(documentPath, imagePath).catch((error: unknown) => {
+    log.warn('Unable to register managed image:', error)
+  })
+})
+
+ipcMain.on('mt::document-images-loaded', (_event, documentPath: string, markdown: string, imageFolderPath: string, storedImages: string[]) => {
+  registerDocumentImages(documentPath, markdown, imageFolderPath, storedImages).catch((error: unknown) => {
+    log.warn('Unable to register existing document images:', error)
+  })
+})
 
 ipcMain.on('mt::response-export', handleResponseForExport as Parameters<typeof ipcMain.on>[1])
 

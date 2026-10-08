@@ -3,6 +3,7 @@ import bus from '../bus'
 import { getUniqueId, deepClone } from '../util'
 import listToTree, { type ListItem, type TreeNode } from '../util/listToTree'
 import { appendTocState, extractTocState } from '../util/tocState'
+import { appendImageState, extractImageState } from '../util/imageState'
 import {
   createDocumentState,
   getOptionsFromState,
@@ -134,6 +135,38 @@ export interface EditorState {
 
 const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+const getManagedImageStatePaths = (markdown: string, pathname: string): string[] => {
+  const preferencesStore = usePreferencesStore()
+  if (!pathname || preferencesStore.imagePreferRelativeDirectory || !preferencesStore.imageFolderPath) return []
+
+  const imageFolderPath = window.path.resolve(preferencesStore.imageFolderPath)
+  const images = new Set<string>()
+  const addReference = (rawPath: string | undefined): void => {
+    if (!rawPath || /^data:|^https?:\/\//i.test(rawPath)) return
+    try {
+      const localPath = /^file:\/\//i.test(rawPath)
+        // file:///C:/... must become C:/..., rather than /C:/...
+        // (the latter is not a valid Windows path for path.relative()).
+        ? decodeURIComponent(rawPath.replace(/^file:\/\/\/?/i, ''))
+        : decodeURIComponent(rawPath)
+      const absolutePath = window.path.isAbsolute(localPath)
+        ? localPath
+        : window.path.resolve(window.path.dirname(pathname), decodeURIComponent(localPath))
+      const relativeToImageFolder = window.path.relative(imageFolderPath, absolutePath)
+      if (relativeToImageFolder && !relativeToImageFolder.startsWith('..') && !window.path.isAbsolute(relativeToImageFolder)) {
+        images.add(window.path.relative(window.path.dirname(pathname), absolutePath).replace(/\\/g, '/'))
+      }
+    } catch {
+      // Ignore a malformed image URL while preserving the rest of the document.
+    }
+  }
+  const markdownImagePattern = /!\[[^\]]*]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+[^)]*)?\s*\)/g
+  for (const match of markdown.matchAll(markdownImagePattern)) addReference(match[1] ?? match[2])
+  const htmlImagePattern = /<img\b[^>]*\bsrc=(?:"([^"]+)"|'([^']+)'|([^\s>]+))[^>]*>/gi
+  for (const match of markdown.matchAll(htmlImagePattern)) addReference(match[1] ?? match[2] ?? match[3])
+  return [...images]
+}
+
 export const useEditorStore = defineStore('editor', {
   state: (): EditorState => ({
     currentFile: null,
@@ -154,7 +187,11 @@ export const useEditorStore = defineStore('editor', {
         // accidentally treating every stored heading as stale.
         : (tab.tocStoredExpandedSlugs ?? tab.tocExpandedSlugs ?? [])
       const expandedSlugs = tab.tocExpandedSlugs ?? currentSlugs
-      const markdown = appendTocState(tab.markdown, expandedSlugs, currentSlugs)
+      const markdownWithImageState = appendImageState(
+        tab.markdown,
+        getManagedImageStatePaths(tab.markdown, tab.pathname)
+      )
+      const markdown = appendTocState(markdownWithImageState, expandedSlugs, currentSlugs)
       tab.tocStoredExpandedSlugs = expandedSlugs.filter((slug) => currentSlugs.includes(slug))
       return markdown
     },
@@ -191,7 +228,10 @@ export const useEditorStore = defineStore('editor', {
 
       const oldIdToNewId: Record<string, string> = {}
       const tabs: IFileState[] = bufferedEditorState.tabs.map((tab) => {
-        const tocState = extractTocState(tab.markdown)
+        // Restored tabs bypass NEW_TAB_WITH_CONTENT, so remove both private
+        // metadata sections here as well before Muya renders the document.
+        const imageState = extractImageState(tab.markdown)
+        const tocState = extractTocState(imageState.markdown)
         const fileState = createDocumentState({
           ...(tab as unknown as Record<string, unknown>),
           markdown: tocState.markdown,
@@ -617,6 +657,23 @@ export const useEditorStore = defineStore('editor', {
           tab.isSaved = true
           debouncedSendBufferedState()
         }
+      })
+
+      window.electron.ipcRenderer.on('mt::temporary-images-promoted', (_, tabId, markdown) => {
+        const tab = this.tabs.find((f) => f.id === tabId)
+        if (!tab || typeof markdown !== 'string') return
+
+        // A formerly Untitled tab referenced images in `<image folder>/temp`.
+        // Its first save moves them into the normal image folder and rewrites
+        // their URLs. Reload this single document so its in-memory model and
+        // rendered <img> elements immediately use the new paths too.
+        const imageState = extractImageState(markdown)
+        const tocState = extractTocState(imageState.markdown)
+        tab.markdown = tocState.markdown
+        if (this.currentFile?.id === tabId) {
+          bus.emit('file-loaded', { id: tabId, markdown: tocState.markdown })
+        }
+        debouncedSendBufferedState()
       })
 
       window.electron.ipcRenderer.on('mt::tab-save-failure', (_, tabId, msg) => {
@@ -1302,7 +1359,8 @@ export const useEditorStore = defineStore('editor', {
       }
 
       const { markdown, isMixedLineEndings } = markdownDocument
-      const tocState = extractTocState(markdown)
+      const imageState = extractImageState(markdown)
+      const tocState = extractTocState(imageState.markdown)
       const docState = createDocumentState(
         Object.assign(
           {},
@@ -1317,6 +1375,21 @@ export const useEditorStore = defineStore('editor', {
         )
       )
       const { id, cursor } = docState
+
+      // Adopt pre-existing images in the configured global folder when a
+      // document is opened. This makes image cleanup work after moving an MDX
+      // file and its image folder to another computer, once the folder has
+      // been selected again in Preferences.
+      const preferencesStore = usePreferencesStore()
+      if (pathname && !preferencesStore.imagePreferRelativeDirectory && preferencesStore.imageFolderPath) {
+        window.electron.ipcRenderer.send(
+          'mt::document-images-loaded',
+          pathname,
+          tocState.markdown,
+          preferencesStore.imageFolderPath,
+          imageState.images ?? []
+        )
+      }
 
       if (selected) {
         this.UPDATE_CURRENT_FILE(docState)

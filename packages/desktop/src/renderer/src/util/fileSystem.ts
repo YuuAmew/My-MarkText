@@ -60,8 +60,21 @@ export const getHash = async(
 export const getContentHash = (content: string | Uint8Array | ArrayBuffer): Promise<string> =>
   getHash(content, 'utf8', 'sha1')
 
+const getUnusedPath = async(preferredPath: string): Promise<string> => {
+  const extension = window.path.extname(preferredPath)
+  const basename = window.path.basename(preferredPath, extension)
+  const dirname = window.path.dirname(preferredPath)
+  let index = 0
+  while (true) {
+    const suffix = index === 0 ? '' : `-${index}`
+    const candidate = window.path.join(dirname, `${basename}${suffix}${extension}`)
+    if (!(await window.fileUtils.pathExists(candidate))) return candidate
+    index++
+  }
+}
+
 export const moveImageToFolder = async(
-  pathname: string,
+  pathname: string | null,
   image: string | File,
   outputDir: string,
   isRelative = false,
@@ -70,8 +83,12 @@ export const moveImageToFolder = async(
   await window.fileUtils.ensureDir(outputDir)
   const isPath = typeof image === 'string'
   if (isPath) {
-    const dir = window.path.dirname(pathname)
-    const imagePath = window.path.resolve(dir, image as string)
+    const sourcePath = image as string
+    const imagePath = window.path.isAbsolute(sourcePath)
+      ? sourcePath
+      : pathname
+      ? window.path.resolve(window.path.dirname(pathname), sourcePath)
+      : sourcePath
     const isImage = await window.fileUtils.isImageFile(imagePath)
     if (isImage) {
       const filename = window.path.basename(imagePath)
@@ -89,10 +106,11 @@ export const moveImageToFolder = async(
     }
   } else {
     const file = image as File
-    const imagePath = window.path.join(
+    const preferredImagePath = window.path.join(
       outputDir,
       `${dayjs().format('YYYY-MM-DD-HH-mm-ss')}-${file.name}`
     )
+    const imagePath = await getUnusedPath(preferredImagePath)
 
     const buffer = new Uint8Array(await file.arrayBuffer())
     await window.fileUtils.writeFile(imagePath, buffer)

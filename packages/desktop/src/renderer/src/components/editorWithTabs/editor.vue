@@ -624,11 +624,18 @@ const imageAction = async (
   }
 
   const resolvedGlobalImageFolderPath = getResolvedImagePath(imageFolderPath.value)
+  // An Untitled tab has no document directory yet. Keep copied images out of
+  // the normal image folder until its first real save; the main process then
+  // promotes only the images still referenced by the document.
+  const targetGlobalImageFolderPath = !isTabSavedOnDisk && resolvedGlobalImageFolderPath
+    ? window.path.join(resolvedGlobalImageFolderPath, 'temp')
+    : resolvedGlobalImageFolderPath
   const resolvedImageRelativeDirectoryName = getResolvedImagePath(imageRelativeDirectoryName.value) // assets/
   const resolvedImageRelativeFullDirectoryPath = relativeBasePath
     ? window.path.join(relativeBasePath, resolvedImageRelativeDirectoryName)
     : null // /root/dir/assets
   let destImagePath = ''
+  let isManagedLocalImage = false
   switch (imageInsertAction.value) {
     case 'upload': {
       try {
@@ -647,12 +654,13 @@ const imageAction = async (
         destImagePath = (await moveImageToFolder(
           currentPathname,
           image,
-          resolvedGlobalImageFolderPath
+          targetGlobalImageFolderPath
         )) as string
       }
       break
     }
     case 'folder': {
+      isManagedLocalImage = true
       if (isTabSavedOnDisk && imagePreferRelativeDirectory.value) {
         // `image` may be a path string (paste/drag/image-selector) — pass
         // `currentPathname` so moveImageToFolder can resolve relative paths
@@ -668,7 +676,7 @@ const imageAction = async (
         destImagePath = (await moveImageToFolder(
           currentPathname,
           image,
-          resolvedGlobalImageFolderPath
+          targetGlobalImageFolderPath
         )) as string
       }
       break
@@ -678,12 +686,13 @@ const imageAction = async (
         // Input is a local path.
         destImagePath = image
       } else {
+        isManagedLocalImage = true
         // Save and move image to image folder if input is binary.
 
         // Respect user preferences if tab exists on disk.
         if (isTabSavedOnDisk && imagePreferRelativeDirectory.value) {
           destImagePath = (await moveImageToFolder(
-            null as unknown as string,
+            null,
             image,
             resolvedImageRelativeFullDirectoryPath as string,
             true,
@@ -693,12 +702,21 @@ const imageAction = async (
           destImagePath = (await moveImageToFolder(
             currentPathname,
             image,
-            resolvedGlobalImageFolderPath
+            targetGlobalImageFolderPath
           )) as string
         }
       }
       break
     }
+  }
+
+  // Record only files MyMarkText itself copied/created. The main process can
+  // then safely recycle them when the document no longer references the image.
+  if (isManagedLocalImage && currentPathname && destImagePath) {
+    const absoluteImagePath = window.path.isAbsolute(destImagePath)
+      ? destImagePath
+      : window.path.resolve(window.path.dirname(currentPathname), destImagePath)
+    window.electron.ipcRenderer.send('mt::managed-image-created', currentPathname, absoluteImagePath)
   }
 
   if (id && sourceCode.value) {

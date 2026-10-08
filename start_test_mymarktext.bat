@@ -8,6 +8,16 @@ set "ROOT=%~dp0"
 set "APPDIR=%ROOT%packages\desktop"
 set "ELECTRON="
 
+rem The installed MyMarkText uses the same application identity. Running both
+rem would make Windows forward this test launch to the installed (old) version.
+tasklist /fi "imagename eq MyMarkText.exe" | find /i "MyMarkText.exe" >nul
+if not errorlevel 1 (
+  echo [Error] Please close the installed MyMarkText before starting the test build.
+  echo Otherwise Windows will open the installed version instead of this test version.
+  pause
+  exit /b 1
+)
+
 for /d %%D in ("%ROOT%node_modules\.pnpm\electron@*") do (
   if exist "%%~fD\node_modules\electron\dist\electron.exe" (
     set "ELECTRON=%%~fD\node_modules\electron\dist\electron.exe"

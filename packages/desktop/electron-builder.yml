@@ -7,6 +7,12 @@ directories:
   buildResources: build
   output: ../../dist
 files:
+  # pnpm keeps ripgrep's platform executable outside the package's own folder.
+  # Copy it explicitly so the packaged app can resolve @vscode/ripgrep at launch.
+  - from: ../../node_modules/.pnpm/@vscode+ripgrep-win32-x64@1.18.0/node_modules/@vscode/ripgrep-win32-x64
+    to: node_modules/@vscode/ripgrep-win32-x64
+    filter:
+      - '**/*'
   - '!**/.vscode/*'
   - '!src/*'
   - '!scripts/*'
@@ -56,6 +62,7 @@ electronLanguages: # Avoid packaging all chromium locales since our app has in-b
 
 asarUnpack:
   - resources/**
+  - node_modules/@vscode/ripgrep-win32-x64/bin/**
 fileAssociations:
   - ext: md
     name: Markdown
