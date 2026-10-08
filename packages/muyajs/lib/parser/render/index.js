@@ -225,7 +225,7 @@ class StateRender {
     Array.from(needToRemoved).forEach((dom) => dom.remove())
 
     // Render cursor block independently
-    if (needRenderCursorBlock) {
+    if (needRenderCursorBlock && cursorOutMostBlock) {
       const { key } = cursorOutMostBlock
       const cursorDom = document.querySelector(`#${key}`)
       if (cursorDom) {

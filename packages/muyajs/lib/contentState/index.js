@@ -260,6 +260,22 @@ class ContentState {
       searchMatches: { matches, index }
     } = this
     const activeBlocks = this.getActiveBlocks()
+
+    // A structural edit can remove the block referenced by the browser's
+    // trailing input selection. Partial rendering requires an active outer
+    // block, so repair that stale cursor and take the safe full-render path.
+    if (!activeBlocks.length) {
+      if (!this.blocks.length) this.blocks = [this.createBlockP()]
+      const fallback = this.getFirstBlock()
+      const offset = fallback.text.length
+      this.cursor = {
+        start: { key: fallback.key, offset },
+        end: { key: fallback.key, offset },
+        isEdit: true
+      }
+      return this.render(isRenderCursor)
+    }
+
     const [startKey, endKey] = this.renderRange
     matches.forEach((m, i) => {
       m.active = i === index
