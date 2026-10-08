@@ -871,7 +871,10 @@ export const useEditorStore = defineStore('editor', {
       debouncedSendBufferedState()
     },
 
-    UPDATE_CURRENT_FILE(currentFile: IFileState): void {
+    UPDATE_CURRENT_FILE(
+      currentFile: IFileState,
+      options: { deferRender?: boolean } = {}
+    ): void {
       const oldCurrentFile = this.currentFile
       let didUpdateCurrentFile = false
       if (oldCurrentFile == null || oldCurrentFile.id !== currentFile.id) {
@@ -886,7 +889,7 @@ export const useEditorStore = defineStore('editor', {
           this.updateTabIdToIndex()
         }
 
-        bus.emit('file-changed', {
+        const fileChangePayload = {
           id,
           markdown,
           cursor,
@@ -895,7 +898,22 @@ export const useEditorStore = defineStore('editor', {
           history,
           scrollTop,
           blocks
-        })
+        }
+
+        if (options.deferRender) {
+          // Hide stale content now, yield one frame so the selected tab is
+          // painted immediately, then do Muya's comparatively expensive
+          // Markdown parse/render. Ignore this queued task if another tab was
+          // selected during that frame.
+          bus.emit('file-switch-pending')
+          requestAnimationFrame(() => {
+            if (this.currentFile?.id === id) {
+              bus.emit('file-changed', fileChangePayload)
+            }
+          })
+        } else {
+          bus.emit('file-changed', fileChangePayload)
+        }
       }
 
       this.UPDATE_LINE_ENDING_MENU()

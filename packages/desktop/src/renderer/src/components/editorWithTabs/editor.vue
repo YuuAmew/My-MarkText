@@ -1151,6 +1151,16 @@ const focusEditor = () => {
   editor.value?.focus()
 }
 
+// A tab click updates the active-tab UI first and schedules its content
+// render for the next frame. Hide the old document immediately so the user
+// never sees it while the new tab is being restored.
+const hidePendingFileSwitch = () => {
+  const container = editor.value?.container
+  if (!container) return
+  container.style.visibility = 'hidden'
+  container.style.pointerEvents = 'none'
+}
+
 const handleScreenShot = () => {
   if (editor.value) {
     document.execCommand('paste')
@@ -1291,6 +1301,7 @@ onMounted(() => {
   bus.on('insert-image', insertImage)
   bus.on('image-uploaded', handleUploadedImage)
   bus.on('file-changed', handleFileChange)
+  bus.on('file-switch-pending', hidePendingFileSwitch)
   bus.on('editor-blur', blurEditor)
   bus.on('editor-focus', focusEditor)
   bus.on('copyAsRich', handleCopyPaste)
@@ -1422,6 +1433,7 @@ onBeforeUnmount(() => {
   bus.off('insert-image', insertImage)
   bus.off('image-uploaded', handleUploadedImage)
   bus.off('file-changed', handleFileChange)
+  bus.off('file-switch-pending', hidePendingFileSwitch)
   bus.off('editor-blur', blurEditor)
   bus.off('editor-focus', focusEditor)
   bus.off('copyAsRich', handleCopyPaste)

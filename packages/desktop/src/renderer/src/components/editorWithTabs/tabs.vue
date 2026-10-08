@@ -70,7 +70,10 @@ let drake: dragula.Drake | null = null
 // Methods incorporated from tabsMixins
 const selectFile = (file: IFileState) => {
   if (file.id !== currentFile.value?.id) {
-    editorStore.UPDATE_CURRENT_FILE(file)
+    // Give Vue one frame to paint the selected tab before parsing and
+    // rendering the destination document. The editor itself is hidden during
+    // that frame, so stale content never flashes while a large file loads.
+    editorStore.UPDATE_CURRENT_FILE(file, { deferRender: true })
   }
 }
 
@@ -175,7 +178,12 @@ onMounted(() => {
     direction: 'horizontal',
     revertOnSpill: true,
     mirrorContainer: tabDropContainer.value,
-    ignoreInputTextSelection: false
+    ignoreInputTextSelection: false,
+    // Dragula defaults to zero pixels, so microscopic hand movement between
+    // mouse down and mouse up is treated as a drag. Require an intentional
+    // horizontal/vertical movement before tab reordering begins.
+    slideFactorX: 8,
+    slideFactorY: 8
   }).on('drop', (el, _target, _source, sibling) => {
     // Current tab that was dropped and need to be reordered.
     const droppedId = el?.getAttribute('data-id')
