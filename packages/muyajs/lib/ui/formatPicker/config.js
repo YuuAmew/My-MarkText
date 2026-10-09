@@ -19,7 +19,7 @@ const icons = [
     shortcut: `${COMMAND_KEY}+B`,
     icon: strongIcon
   }, {
-    type: 'em',
+    type: 'i',
     tooltip: 'Italic',
     shortcut: `${COMMAND_KEY}+I`,
     icon: emphasisIcon

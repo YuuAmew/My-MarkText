@@ -4,7 +4,7 @@ import type { CommandManager } from '../../commands'
 
 const MENU_ID_FORMAT_MAP: Readonly<Record<string, string>> = Object.freeze({
   strongMenuItem: 'strong',
-  emphasisMenuItem: 'em',
+  emphasisMenuItem: 'i',
   inlineCodeMenuItem: 'inline_code',
   strikeMenuItem: 'del',
   hyperlinkMenuItem: 'link',
@@ -25,7 +25,7 @@ export const clearFormat = (win: Win): void => {
 }
 
 export const emphasis = (win: Win): void => {
-  format(win, 'em')
+  format(win, 'i')
 }
 
 export const highlight = (win: Win): void => {

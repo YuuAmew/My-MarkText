@@ -142,6 +142,11 @@ const clickCtrl = (ContentState) => {
           data = inlineNode.textContent
           break
         }
+        case 'I': {
+          formatType = 'i'
+          data = inlineNode.textContent
+          break
+        }
         case 'DEL': {
           formatType = 'del'
           data = inlineNode.textContent

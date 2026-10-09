@@ -384,7 +384,7 @@ const commands: CommandDescriptor[] = [
   {
     id: 'format.emphasis',
     execute: async() => {
-      focusEditorAndExecute(() => bus.emit('format', 'em'))
+      focusEditorAndExecute(() => bus.emit('format', 'i'))
     }
   },
   {

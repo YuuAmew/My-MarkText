@@ -38,9 +38,18 @@ const matchHtmlTag = (src, disableHtml) => {
     return null
   }
 
+  // Do not let legacy semantic-emphasis HTML create a second italic syntax.
+  // Literal <em> tags should remain visible text; only <i> is MyMarkText
+  // italic formatting.
+  if (match[3] && /^em$/i.test(match[3])) {
+    return null
+  }
+
   // Ignore HTML tag when HTML rendering is disabled and import it as plain text.
-  // NB: We have to allow img tag to support image resizer and options.
-  if (disableHtml && (!match[3] || !/^img$/i.test(match[3]))) {
+  // NB: We have to allow img tag to support image resizer and options. Italic
+  // is deliberately an HTML-only format in MyMarkText, so keep <i> available
+  // even when general HTML rendering is disabled.
+  if (disableHtml && (!match[3] || !/^(?:img|i)$/i.test(match[3]))) {
     return null
   }
   return match
@@ -144,8 +153,11 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
       pos = pos + backTo[0].length
       continue
     }
-    // strong | em
-    const emRules = ['strong', 'em']
+    // MyMarkText intentionally reserves italic formatting for <i>...</i>.
+    // In particular, a normal asterisk in prose must never turn *text* into
+    // an italic span. Keep Markdown strong (**) support, but do not tokenize
+    // the legacy Markdown emphasis rule (* / _).
+    const emRules = ['strong']
     let inChunk
     for (const rule of emRules) {
       const to = inlineRules[rule].exec(src)

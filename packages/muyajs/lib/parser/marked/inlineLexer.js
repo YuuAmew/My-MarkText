@@ -94,6 +94,14 @@ InlineLexer.prototype.output = function(src) {
     // tag
     cap = this.rules.tag.exec(src)
     if (cap) {
+      // Keep <em> literal. MyMarkText uses <i> as its only italic syntax,
+      // including in preview/export output.
+      if (/^<\/?em(?:\s|>)/i.test(cap[0])) {
+        src = src.substring(cap[0].length)
+        lastChar = cap[0].charAt(cap[0].length - 1)
+        out += escape(cap[0])
+        continue
+      }
       if (!this.inLink && /^<a /i.test(cap[0])) {
         this.inLink = true
       } else if (this.inLink && /^<\/a>/i.test(cap[0])) {
@@ -239,18 +247,9 @@ InlineLexer.prototype.output = function(src) {
       }
     }
 
-    // em
-    cap = this.rules.em.exec(src)
-    if (cap) {
-      const marker = cap[0].match(/^(?:_{1,2}|\*{1,2})/)[0]
-      const isValid = validateEmphasize(src, cap[0].length, marker, lastChar, this.highPriorityEmpRules)
-      if (isValid) {
-        src = src.substring(cap[0].length)
-        lastChar = cap[0].charAt(cap[0].length - 1)
-        out += this.renderer.em(this.output(cap[6] || cap[5] || cap[4] || cap[3] || cap[2] || cap[1]))
-        continue
-      }
-    }
+    // MyMarkText uses <i>...</i> as its sole italic syntax. Do not interpret
+    // Markdown *text* or _text_ here either, so previews/exports agree with
+    // the WYSIWYG editor and old documents keep their literal asterisks.
 
     // code
     cap = this.rules.code.exec(src)

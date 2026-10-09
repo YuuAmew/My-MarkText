@@ -345,6 +345,10 @@ export const FORMAT_MARKER_MAP = Object.freeze({
     open: '<u>',
     close: '</u>'
   },
+  i: {
+    open: '<i>',
+    close: '</i>'
+  },
   sub: {
     open: '<sub>',
     close: '</sub>'
