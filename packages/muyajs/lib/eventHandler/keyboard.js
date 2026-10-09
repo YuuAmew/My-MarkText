@@ -9,12 +9,24 @@ class Keyboard {
     this.muya = muya
     this.isComposed = false
     this.shownFloat = {}
+    this.ignoreWindowSwitchKeyupUntil = 0
     this.recordIsComposed()
+    this.recordWindowFocus()
     this.dispatchEditorState()
     this.keydownBinding()
     this.keyupBinding()
     this.inputBinding()
     this.listen()
+  }
+
+  recordWindowFocus() {
+    const { eventCenter } = this.muya
+    eventCenter.attachDOMEvent(window, 'focus', () => {
+      // A rapid Alt+Tab may dispatch the final Alt or Tab keyup after the
+      // renderer has already regained focus. Give those OS-switch tail events
+      // a short grace period so they cannot reset the DOM selection.
+      this.ignoreWindowSwitchKeyupUntil = performance.now() + 200
+    })
   }
 
   listen() {
@@ -66,6 +78,18 @@ class Keyboard {
 
     let timer = null
     const changeHandler = (event) => {
+      // This listener runs before the dedicated keyup handler below. Ignore
+      // Alt+Tab's trailing keyup here as well: dispatchSelectionChange()
+      // reaches the application's "keep cursor visible" code and can scroll
+      // the viewport even when no document edit has occurred.
+      if (
+        event.type === 'keyup' &&
+        performance.now() < this.ignoreWindowSwitchKeyupUntil &&
+        (event.key === 'Alt' || event.key === 'Tab')
+      ) {
+        return
+      }
+
       if (
         event.type === 'keyup' &&
         (event.key === EVENT_KEYS.ArrowUp || event.key === EVENT_KEYS.ArrowDown) &&
@@ -232,6 +256,18 @@ class Keyboard {
     const { container, eventCenter, contentState } = this.muya
     const handler = (event) => {
       container.classList.remove('ag-meta-or-ctrl')
+
+      // With a fast Alt+Tab, Chromium can deliver the final Alt *or Tab*
+      // keyup only after this window has regained focus. Treating either as
+      // an editor event can cause a partial render, and resetting the
+      // contenteditable selection makes Chromium scroll the caret into view.
+      if (
+        performance.now() < this.ignoreWindowSwitchKeyupUntil &&
+        (event.key === 'Alt' || event.key === 'Tab')
+      ) {
+        return
+      }
+
       // check if edit emoji
       const node = selection.getSelectionStart()
       const paragraph = findNearestParagraph(node)
